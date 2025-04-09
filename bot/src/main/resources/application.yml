@@ -19,4 +19,4 @@ flyway:
   locations: classpath:db/migration
 
 telegram:
-  token: secreticannottellyou
+  token: x
