@@ -1,0 +1,22 @@
+datasource:
+  driver: org.postgresql.Driver
+  url: jdbc:postgresql://localhost:5432/aaims_db?currentSchema=alpha
+  username: admin
+  password: admin
+
+jpa:
+  dialect: org.hibernate.dialect.PostgreSQLDialect
+  default_schema: alpha
+  ddl_auto: update
+
+flyway:
+  enabled: true
+  url: jdbc:postgresql://localhost:5432/aaims_db
+  user: admin
+  password: admin
+  schemas: alpha
+  table: flyway_schema_history_alpha
+  locations: classpath:db/migration
+
+telegram:
+  token: secreticannottellyou
