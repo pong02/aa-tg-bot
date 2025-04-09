@@ -1,16 +1,17 @@
 /help - Show bot guide
 /menu - Easy navigation mode
 /ping - Test latency of bot
-/bullshit1 - adasdasdasdasd
-/bullshit2 - asfasdfadsfasf
-/idgaf - Check for updates
-/idgaf2 - Report an issue
-/idgaf4 - Contact support
-/idgaf5 - Send feedback
-/idgaf6 - Frequently Asked Questions
-/adasd - djaijds
-/asdasjduasji - sadasdasdad asd ada
+/ocr - Enable OCR
+/envelope - Edit envelope inventory
+/stamp - Edit stamp inventory
+/inventory - Display full stamp/envelope inventory
+/buy - Calculate cost of envelopes
+/meta - Meta
+/dispatch - Uploading today dispatch
+/img - ??
 /asdads - asdojaisd jiaj ijai
 /asd-aa - ushduh  uuuasdhu hda
 /adddd - ushduh maidnu
+/isjduh - auhd
+/uyga - akjyftehnsm
 
