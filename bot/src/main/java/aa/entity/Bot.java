@@ -1,25 +1,45 @@
 package aa.entity;
 
+import aa.exception.ParseError;
+import aa.helper.ExcelProcessor;
 import aa.helper.HelpPaginator;
 import aa.helper.MessageBodyHelper;
+import aa.model.Label;
+import aa.repository.LabelDao;
+import aa.repository.LabelDaoImpl;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 import lombok.extern.slf4j.Slf4j;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.Document;
+import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import com.vdurmont.emoji.EmojiParser;
 
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.lang.Math.toIntExact;
 
 @Slf4j
 public class Bot implements LongPollingSingleThreadUpdateConsumer {
+
+    private AtomicBoolean expectingFile = new AtomicBoolean(false);
+
+    EntityManagerFactory emf = Persistence.createEntityManagerFactory("bot-persistence");
+    EntityManager em = emf.createEntityManager();
+    LabelDao labelDao = new LabelDaoImpl(em);
+
 
     List<String> helpItems;
 
@@ -33,18 +53,61 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     @Override
     public void consume(Update update) {
+        if (update.getMessage().hasDocument() && expectingFile.get()) {
+            long chat_id = update.getMessage().getChatId();
+            Document document = update.getMessage().getDocument();
+            String fileName = document.getFileName();
+            SendMessage message;
+            //check file type, and handle accordingly
+
+            if (!fileName.toLowerCase().endsWith(".xlsx")) {
+                message = sendMessage(chat_id,"Only .xlsx files are supported. Please upload a valid Excel file.",null);
+            }
+            else {
+                List<Label> labels;
+                try {
+                    String fileId = document.getFileId();
+
+                    // Step 1: Resolve the actual file path from Telegram
+                    GetFile getFile = new GetFile(fileId);
+                    File telegramFile = telegramClient.execute(getFile);
+
+                    // Step 2: Download file as InputStream
+                    try (InputStream inputStream = telegramClient.downloadFileAsStream(telegramFile)) {
+                        labels = ExcelProcessor.read(inputStream, labelDao);
+                        log.info("{} lines parsed and saved to DB as pending",labels.size());
+                        message = sendMessage(chat_id, "File read successfully", null);
+                        expectingFile.set(false);
+                    }
+
+                } catch (ParseError e) {
+                    log.error("Invalid file headers", e);
+                    message = sendMessage(chat_id, "Invalid Excel file uploaded. Please try again", null);
+                    expectingFile.set(true);
+                } catch (Exception e) {
+                    log.error("Error downloading or processing file", e);
+                    message = sendMessage(chat_id, "Error processing the uploaded Excel file. Please try again", null);
+                    expectingFile.set(true);
+                }
+            }
+            try {
+                telegramClient.execute(message); // Sending our message object to user
+            } catch (TelegramApiException e) {
+                log.info(Arrays.toString(e.getStackTrace()));
+            }
+        }
         // We check if the update has a message and the message has text
-        if (update.hasMessage() && update.getMessage().hasText()) {
+        else if (update.hasMessage() && update.getMessage().hasText()) {
             // Set variables
             String name = update.getMessage().getFrom().getFirstName();
-            Long id = update.getMessage().getFrom().getId();
+//            Long id = update.getMessage().getFrom().getId();
             String txt = update.getMessage().getText();
             long chat_id = update.getMessage().getChatId();
             String reply = "ok buddy "+EmojiParser.parseToUnicode(":nerd:");
             String errorEmoji = EmojiParser.parseToUnicode(":no_entry_sign:");
             InlineKeyboardMarkup buttons = null;
 
-            log.info(name + " said "+ update.getMessage());
+            log.info("{} said {}", name, update.getMessage());
             System.out.println(name + " said "+ txt);
 
             if (txt.startsWith("/")){
@@ -61,6 +124,10 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         reply = HelpPaginator.getHelpPage(helpItems, helpPage);
                         buttons = MessageBodyHelper.helpBody;
                         break;
+                    case "/dispatch":
+                        expectingFile.set(true);
+                        reply = "Dispatch upload prompted. Please upload an .xlsx file.";
+                        break;
                     case "/ping":
                         System.out.println("Pinging bot");
                         break;
@@ -75,13 +142,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         break;
                 }
             }
-
-            SendMessage message = SendMessage // Create a message object
-                    .builder()
-                    .chatId(chat_id)
-                    .text(reply)
-                    .replyMarkup(buttons)
-                    .build();
+            SendMessage message = sendMessage(chat_id,reply,buttons);
             try {
                 telegramClient.execute(message); // Sending our message object to user
             } catch (TelegramApiException e) {
@@ -109,7 +170,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         try {
                             telegramClient.execute(help_next);
                         } catch (TelegramApiException e) {
-                            e.printStackTrace();
+                            log.error(Arrays.toString(e.getStackTrace()));
                         }
                     }
                     break;
@@ -127,11 +188,20 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         try {
                             telegramClient.execute(help_prev);
                         } catch (TelegramApiException e) {
-                            e.printStackTrace();
+                            log.error(Arrays.toString(e.getStackTrace()));
                         }
                     }
                     break;
             }
         }
     }
+    private SendMessage sendMessage(long chat_id, String reply, InlineKeyboardMarkup buttons){
+        return SendMessage // Create a message object
+                .builder()
+                .chatId(chat_id)
+                .text(reply)
+                .replyMarkup(buttons)
+                .build();
+    }
+
 }

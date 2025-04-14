@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             version="3.0">
+
+    <persistence-unit name="bot-persistence">
+        <!-- JPA-managed entity -->
+        <class>aa.model.Label</class>
+
+        <!-- JDBC connection details -->
+        <properties>
+            <property name="jakarta.persistence.jdbc.driver" value="org.postgresql.Driver"/>
+            <property name="jakarta.persistence.jdbc.url" value="jdbc:postgresql://localhost:5432/aaims_db"/>
+            <property name="jakarta.persistence.jdbc.user" value="admin"/>
+            <property name="jakarta.persistence.jdbc.password" value="admin"/>
+            <property name="hibernate.default_schema" value="alpha"/>
+
+
+            <!-- Schema management -->
+            <property name="jakarta.persistence.schema-generation.database.action" value="update"/>
+
+            <!-- Logging (optional but useful) -->
+            <property name="jakarta.persistence.logging.level" value="INFO"/>
+        </properties>
+    </persistence-unit>
+
+</persistence>
