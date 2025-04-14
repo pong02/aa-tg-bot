@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.methods.GetMe;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Document;
@@ -128,8 +129,17 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         expectingFile.set(true);
                         reply = "Dispatch upload prompted. Please upload an .xlsx file.";
                         break;
-                    case "/ping":
-                        System.out.println("Pinging bot");
+                    case "/ping":long startTime = System.currentTimeMillis();
+                        try {
+                            telegramClient.execute(new GetMe()); // lightweight API call
+                            long latency = System.currentTimeMillis() - startTime;
+
+                            reply = "Bot API latency: " + latency + " ms";
+                        } catch (Exception e) {
+                            log.error("Ping failed", e);
+
+                            reply = "Ping failed. Bot may be experiencing network issues.";
+                        }
                         break;
                     case "/ocr":
                         System.out.println("OCR FLOW begin");
