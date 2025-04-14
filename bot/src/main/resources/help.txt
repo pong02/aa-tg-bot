@@ -1,17 +1,20 @@
 /help - Show bot guide
 /menu - Easy navigation mode
 /ping - Test latency of bot
-/ocr - Enable OCR
+/meta - Meta
+/img - ??
+/dispatch - Uploading today dispatch (.xlsx)
+/confirm - Confirm pending dispatch labels (will be auto confirmed in 3days by default)
+/cancel - Move pending dispatch labels into Bin
+/ocr - Start OCR, will stop recognising after a period of inactivity
+/inventory - Display full stamp/envelope inventory
+/usage - Use up envelope and stamps
 /envelope - Edit envelope inventory
 /stamp - Edit stamp inventory
-/inventory - Display full stamp/envelope inventory
 /buy - Calculate cost of envelopes
-/meta - Meta
-/dispatch - Uploading today dispatch
-/img - ??
-/asdads - asdojaisd jiaj ijai
-/asd-aa - ushduh  uuuasdhu hda
-/adddd - ushduh maidnu
-/isjduh - auhd
-/uyga - akjyftehnsm
-
+/pretium - Vivamus at consequat massa. Praesent.
+/mauris - In felis eros, rutrum vel.
+/uyga - Vestibulum non erat in leo.
+/porta - Cras non diam ultricies, bibendum.
+/vitae - Curabitur risus sem, imperdiet nec.
+/fusce - Aenean eu dictum elit. Proin.

@@ -53,7 +53,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     @Override
     public void consume(Update update) {
-        if (update.getMessage().hasDocument() && expectingFile.get()) {
+        if (expectingFile.get() && update.getMessage().hasDocument()) {
             long chat_id = update.getMessage().getChatId();
             Document document = update.getMessage().getDocument();
             String fileName = document.getFileName();
