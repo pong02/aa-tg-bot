@@ -8,8 +8,6 @@ import aa.model.Label;
 import aa.repository.LabelDao;
 import aa.repository.LabelDaoImpl;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
 import lombok.extern.slf4j.Slf4j;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
@@ -37,9 +35,8 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     private AtomicBoolean expectingFile = new AtomicBoolean(false);
 
-    EntityManagerFactory emf = Persistence.createEntityManagerFactory("bot-persistence");
-    EntityManager em = emf.createEntityManager();
-    LabelDao labelDao = new LabelDaoImpl(em);
+    private final EntityManager em;
+    private final LabelDao labelDao;
 
 
     List<String> helpItems;
@@ -48,8 +45,10 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     private final TelegramClient telegramClient;
 
-    public Bot(String botToken) {
+    public Bot(String botToken, EntityManager em) {
         telegramClient = new OkHttpTelegramClient(botToken);
+        this.em = em;
+        this.labelDao = new LabelDaoImpl(em);
     }
 
     @Override
@@ -129,7 +128,16 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         expectingFile.set(true);
                         reply = "Dispatch upload prompted. Please upload an .xlsx file.";
                         break;
-                    case "/ping":long startTime = System.currentTimeMillis();
+                    case "/confirm":
+                        List<Label> confirmedOrders = labelDao.confirmPending();
+                        reply = "Confirmed "+ confirmedOrders.size() +" orders";
+                        break;
+                    case "/cancel":
+                        List<Label> deletedOrders = labelDao.deletePending();
+                        reply = "Moved "+ deletedOrders.size() +" orders to the Bin";
+                        break;
+                    case "/ping":
+                        long startTime = System.currentTimeMillis();
                         try {
                             telegramClient.execute(new GetMe()); // lightweight API call
                             long latency = System.currentTimeMillis() - startTime;
