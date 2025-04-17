@@ -19,14 +19,13 @@ CREATE TABLE stamp_configuration (
 
 -- 3. Create Stamp Combination Table (Join Table)
 CREATE TABLE stamp_combination (
-    id UUID PRIMARY KEY,
     stamp_configuration_id UUID NOT NULL,
     stamp_id UUID NOT NULL,
     quantity INTEGER NOT NULL,
-    CONSTRAINT fk_stamp_combination_configuration FOREIGN KEY (stamp_configuration_id)
-        REFERENCES stamp_configuration(id) ON DELETE CASCADE,
     CONSTRAINT fk_stamp_combination_stamp FOREIGN KEY (stamp_id)
-        REFERENCES stamp(id) ON DELETE CASCADE
+        REFERENCES stamp(id) ON DELETE CASCADE,
+    CONSTRAINT fk_combination_config FOREIGN KEY (stamp_configuration_id)
+        REFERENCES stamp_configuration(id) ON DELETE CASCADE
 );
 
 -- 4. Create Envelope Table
@@ -57,10 +56,10 @@ INSERT INTO stamp_configuration (id, name) VALUES
   ('11111111-1111-1111-1111-111111111c00', 'Small');
 
 -- Insert Stamp Combinations
-INSERT INTO stamp_combination (id, stamp_configuration_id, stamp_id, quantity) VALUES
-  (gen_random_uuid(), '11111111-1111-1111-1111-111111111c04', '00000000-0000-0000-0000-000000000150', 2),
-  (gen_random_uuid(), '11111111-1111-1111-1111-111111111c05', '00000000-0000-0000-0000-000000000150', 2),
-  (gen_random_uuid(), '11111111-1111-1111-1111-111111111c00', '00000000-0000-0000-0000-000000000150', 1);
+INSERT INTO stamp_combination (stamp_configuration_id, stamp_id, quantity) VALUES
+  ('11111111-1111-1111-1111-111111111c04', '00000000-0000-0000-0000-000000000150', 2),
+  ('11111111-1111-1111-1111-111111111c05', '00000000-0000-0000-0000-000000000150', 2),
+  ('11111111-1111-1111-1111-111111111c00', '00000000-0000-0000-0000-000000000150', 1);
 
 -- Insert Envelopes
 INSERT INTO envelope (id, name, quantity, price, description, stamp_config_id)

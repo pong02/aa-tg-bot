@@ -20,6 +20,7 @@ public class StampConfiguration {
 
     private String name;
 
-    @OneToMany(mappedBy = "stampConfiguration", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ElementCollection
+    @CollectionTable(name = "stamp_combination", joinColumns = @JoinColumn(name = "stamp_configuration_id"))
     private List<StampCombination> stampCombinations;
 }

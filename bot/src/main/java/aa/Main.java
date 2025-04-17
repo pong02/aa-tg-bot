@@ -12,7 +12,9 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
 import lombok.extern.slf4j.Slf4j;
+import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
+import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 import java.util.Arrays;
 
@@ -36,9 +38,10 @@ public class Main {
         LabelDao labelDao = new LabelDaoImpl(em);
         LabelPurgeScheduler scheduler = new LabelPurgeScheduler(labelDao);
         scheduler.start();
+        TelegramClient client = new OkHttpTelegramClient(botToken);
 
-        try (TelegramBotsLongPollingApplication botsApplication = new TelegramBotsLongPollingApplication()) {
-            botsApplication.registerBot(botToken, new Bot(botToken, em));
+        try (TelegramBotsLongPollingApplication app = new TelegramBotsLongPollingApplication()) {
+            app.registerBot(botToken, new Bot(client, em)); // this links to Bot.consume(Update)
             System.out.println("Waltuh successfully started!");
             Thread.currentThread().join();
         } catch (Exception e) {

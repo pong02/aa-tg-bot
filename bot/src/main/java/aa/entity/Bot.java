@@ -1,15 +1,12 @@
 package aa.entity;
 
+import aa.dto.CallbackPayload;
 import aa.exception.ParseError;
-import aa.helper.ExcelProcessor;
-import aa.helper.HelpPaginator;
-import aa.helper.MessageBodyHelper;
-import aa.model.Label;
-import aa.repository.LabelDao;
-import aa.repository.LabelDaoImpl;
+import aa.helper.*;
+import aa.model.*;
+import aa.repository.*;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
-import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
@@ -18,15 +15,19 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.webapp.WebAppData;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import com.vdurmont.emoji.EmojiParser;
 
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.List;
+import java.math.BigDecimal;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.lang.Math.toIntExact;
 
@@ -35,25 +36,49 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     private AtomicBoolean expectingFile = new AtomicBoolean(false);
 
-    private final EntityManager em;
     private final LabelDao labelDao;
 
+    private final EnvelopeDao envelopeDao;
 
-    List<String> helpItems;
+    private final StampDao stampDao;
 
-    Integer helpPage;
+    private final StampConfigurationDao stampConfigurationDao;
+
+    private Map<Stamp,Integer> stampConfiguration = new HashMap<>();
+
+    private UUID cachedId;
+
+    private List<String> helpItems;
+
+    private Integer helpPage;
 
     private final TelegramClient telegramClient;
 
-    public Bot(String botToken, EntityManager em) {
-        telegramClient = new OkHttpTelegramClient(botToken);
-        this.em = em;
+    public Bot(TelegramClient client, EntityManager em) {
+        this.telegramClient = client;
         this.labelDao = new LabelDaoImpl(em);
+        this.envelopeDao = new EnvelopeDaoImpl(em);
+        this.stampDao = new StampDaoImpl(em);
+        this.stampConfigurationDao = new StampConfigurationDaoImpl(em);
     }
 
     @Override
     public void consume(Update update) {
-        if (expectingFile.get() && update.getMessage().hasDocument()) {
+        System.out.println("RAW UPDATE >>> " + update);
+        if (update.hasMessage() && update.getMessage().hasWebAppData()) {
+            update.getMessage().getWebAppData();
+            long chat_id = update.getMessage().getChatId();
+            System.out.println("Received form data");
+            WebAppData webAppData = update.getMessage().getWebAppData();
+            String data = webAppData.getData();
+            long chatId = update.getMessage().getChatId();
+
+            // Process the Web App data as needed
+            // For example, send a confirmation message back to the user
+            SendMessage message = sendMessage(chat_id, "Received Web App data: " + data, null);
+
+        }
+        else if (expectingFile.get() && update.getMessage().hasDocument()) {
             long chat_id = update.getMessage().getChatId();
             Document document = update.getMessage().getDocument();
             String fileName = document.getFileName();
@@ -145,15 +170,53 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                             reply = "Bot API latency: " + latency + " ms";
                         } catch (Exception e) {
                             log.error("Ping failed", e);
-
                             reply = "Ping failed. Bot may be experiencing network issues.";
                         }
                         break;
                     case "/ocr":
                         System.out.println("OCR FLOW begin");
                         break;
-                    case "/env":
-                        System.out.println("Envelope inventory");
+                    case "/envelope":
+                        List<Envelope> envelopeList = envelopeDao.getAllEnvelopes();
+                        reply = ListMessageFormatter.format(envelopeList);
+                        buttons = MessageBodyHelper.envelopeBodyC;
+                        break;
+                    case "/create-envelope":
+                        String text = update.getMessage().getText().substring("/create-envelope".length()).trim();
+                        String[] parts = text.split(",", 4);
+
+                        if (parts.length == 4) {
+                            String ename = parts[0].trim();
+                            String description = parts[1].trim();
+                            int quantity;
+                            BigDecimal price;
+
+                            try {
+                                quantity = Integer.parseInt(parts[2].trim());
+                                price = BigDecimal.valueOf(Double.parseDouble(parts[3].trim()));
+
+                                reply = "✅ Submission received:\n" +
+                                                "Name: " + ename + "\n" +
+                                                "Description: " + description + "\n" +
+                                                "Quantity: " + quantity + "\n" +
+                                                "Price: RM" + price;
+
+                                Envelope env = Envelope.builder().name(ename).description(description).quantity(quantity).price(price).build();
+
+                                envelopeDao.save(env);
+
+                                System.out.println("Creating envelope "+env.getId());
+
+                                reply = "Created Envelope successfully: "+ListMessageFormatter.format(List.of(env));
+                                buttons = MessageBodyHelper.envelopeBodyC2(env.getId());
+
+                            } catch (NumberFormatException e) {
+                                reply = "❌ Quantity and price must be valid numbers.";
+                            }
+
+                        } else {
+                            reply = "❌ Invalid format. Use: /submit Name, Description, Quantity, Price";
+                        }
                         break;
                     default:
                         reply = errorEmoji+" Command not recognised, please try /help";
@@ -172,8 +235,9 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
             String call_data = update.getCallbackQuery().getData();
             long message_id = update.getCallbackQuery().getMessage().getMessageId();
             long chat_id = update.getCallbackQuery().getMessage().getChatId();
-
-            switch (call_data){
+            CallbackPayload callback = CallbackPayloadUtil.fromJson(call_data);
+            String callback_action = callback.getAction();
+            switch (callback_action){
                 case ("help-next") :
                     if (HelpPaginator.getTotalPages(helpItems) > helpPage) {
                         helpPage++;
@@ -209,6 +273,143 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                             log.error(Arrays.toString(e.getStackTrace()));
                         }
                     }
+                    break;
+                case ("create-envelope") :
+                    SendMessage create_env = SendMessage.builder()
+                            .chatId(chat_id)
+                            .text("""
+                                Please enter the following fields (separated by commas):
+                        
+                                /create-envelope Name, Description, Quantity, Price
+                        
+                                Example:
+                                `/create-envelope Small, Small Blank Envelope, 1000, 99`
+                                """)
+                            .replyMarkup(ForceReplyKeyboard.builder().forceReply(true).build())
+                            .build();
+                    try {
+                        telegramClient.execute(create_env);
+                    } catch (TelegramApiException e) {
+                        log.error(Arrays.toString(e.getStackTrace()));
+                    }
+                    break;
+                case ("estamp") :
+                    Envelope envelope;
+                    UUID env_id = callback.getId();
+                    System.out.println("Stamp config for envelope: "+env_id);
+                    Optional<Envelope> optionalEnvelope = envelopeDao.findById(env_id);
+                    if (optionalEnvelope.isEmpty()){
+                        log.error("Envelope failed to fetch.");
+                    }
+                    else {
+                        envelope = optionalEnvelope.get();
+                    }
+                    List<Stamp> stamps = stampDao.findAllStamps();
+                    //generate buttons row for each stamp found, with a + - button, each editing the message to show how many of each stamp we adding
+                    stampConfiguration = stamps.stream()
+                            .collect(Collectors.toMap(
+                                    Function.identity(), // each Stamp as key
+                                    stamp -> 0           // initial value
+                            ));
+
+                    //here cache the env id because stamp needs to be passed via payload id
+                    cachedId = env_id;
+                    EditMessageText edit_stamp_conf = EditMessageText.builder()
+                            .chatId(chat_id)
+                            .messageId(toIntExact(message_id))
+                            .text("Editing stamp configuration for "+env_id)
+                            .replyMarkup(MessageBodyHelper.envelopeBodyC3(env_id,stampConfiguration))
+                            .build();
+                    try {
+                        telegramClient.execute(edit_stamp_conf);
+                    } catch (TelegramApiException e) {
+                        log.error(Arrays.toString(e.getStackTrace()));
+                    }
+                    break;
+                case "stamp+":
+                case "stamp-":
+                    UUID stampId = callback.getId();
+
+                    // Get the stamp object by ID
+                    Optional<Stamp> matchingStamp = stampConfiguration.keySet().stream()
+                            .filter(s -> s.getId().equals(stampId))
+                            .findFirst();
+
+                    if (matchingStamp.isPresent()) {
+                        Stamp stamp = matchingStamp.get();
+                        int currentQty = stampConfiguration.get(stamp);
+
+                        // Update quantity based on action
+                        if (callback_action.equals("stamp+")) {
+                            stampConfiguration.put(stamp, currentQty + 1);
+                        } else if (currentQty > 0) {
+                            stampConfiguration.put(stamp, currentQty - 1);
+                        }
+
+                        // Update the message UI
+                        EditMessageText updateQtyView = EditMessageText.builder()
+                                .chatId(chat_id)
+                                .messageId(toIntExact(message_id))
+                                .text("Editing stamp configuration for " + cachedId)
+                                .replyMarkup(MessageBodyHelper.envelopeBodyC3(callback.getId(), stampConfiguration))
+                                .build();
+
+                        try {
+                            telegramClient.execute(updateQtyView);
+                        } catch (TelegramApiException e) {
+                            log.error("Telegram API error: " + Arrays.toString(e.getStackTrace()), e);
+                        }
+                    } else {
+                        try {
+                            telegramClient.execute(SendMessage.builder()
+                                    .chatId(chat_id)
+                                    .text("❌ Stamp not found.")
+                                    .build());
+                        } catch (TelegramApiException e) {
+                            log.error("Telegram API error: " + Arrays.toString(e.getStackTrace()), e);
+                        }
+                    }
+                    break;
+                case "estampz":
+                    Optional<Envelope> envelopeUpdateOptional = envelopeDao.findById(cachedId);
+
+                    if (envelopeUpdateOptional.isPresent()) {
+
+                        Envelope envelopeUpdate = envelopeUpdateOptional.get();
+
+                        //setup the stamp configuration
+                        List<StampCombination> combinations = stampConfiguration.entrySet().stream()
+                                .map(entry -> StampCombination.builder()
+                                        .stamp(entry.getKey())
+                                        .quantity(entry.getValue())
+                                        .build())
+                                .toList();
+
+                        StampConfiguration config = StampConfiguration.builder()
+                                .name(envelopeUpdate.getName())
+                                .stampCombinations(combinations)
+                                .build();
+                        stampConfigurationDao.save(config);
+
+                        envelopeUpdate.setStampConfiguration(config);
+                        envelopeDao.save(envelopeUpdate);
+
+                        EditMessageText updateQtyView = EditMessageText.builder()
+                                .chatId(chat_id)
+                                .messageId(toIntExact(message_id))
+                                .text("Successfully edited stamp configuration for " + cachedId)
+                                .build();
+                        try {
+                            telegramClient.execute(updateQtyView);
+                        } catch (TelegramApiException e) {
+                            log.error("Telegram API error: " + Arrays.toString(e.getStackTrace()), e);
+                        }
+
+                    } else {
+                        log.error("Error setting stamp configuration for envelope "+ cachedId);
+                    }
+
+                    cachedId = null;
                     break;
             }
         }

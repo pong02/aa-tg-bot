@@ -9,8 +9,8 @@
 /ocr - Start OCR, will stop recognising after a period of inactivity
 /inventory - Display full stamp/envelope inventory
 /usage - Use up envelope and stamps
-/envelope - Edit envelope inventory
-/stamp - Edit stamp inventory
+/envelope - Edit envelope info
+/stamp - Edit stamp info
 /buy - Calculate cost of envelopes
 /pretium - Vivamus at consequat massa. Praesent.
 /mauris - In felis eros, rutrum vel.
