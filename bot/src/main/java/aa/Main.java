@@ -33,15 +33,17 @@ public class Main {
         String botToken = config.getTelegram().getToken();
 
         //set up for bot and cron
-        EntityManagerFactory emf = Persistence.createEntityManagerFactory("bot-persistence");
-        EntityManager em = emf.createEntityManager();
+        EntityManager em;
+        try (EntityManagerFactory emf = Persistence.createEntityManagerFactory("bot-persistence")) {
+            em = emf.createEntityManager();
+        }
         LabelDao labelDao = new LabelDaoImpl(em);
         LabelPurgeScheduler scheduler = new LabelPurgeScheduler(labelDao);
         scheduler.start();
         TelegramClient client = new OkHttpTelegramClient(botToken);
 
         try (TelegramBotsLongPollingApplication app = new TelegramBotsLongPollingApplication()) {
-            app.registerBot(botToken, new Bot(client, em)); // this links to Bot.consume(Update)
+            app.registerBot(botToken, new Bot(client, em));
             System.out.println("Waltuh successfully started!");
             Thread.currentThread().join();
         } catch (Exception e) {
