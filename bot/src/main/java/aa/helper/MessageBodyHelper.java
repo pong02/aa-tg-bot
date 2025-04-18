@@ -1,6 +1,7 @@
 package aa.helper;
 
 import aa.dto.CallbackPayload;
+import aa.model.Envelope;
 import aa.model.Stamp;
 import com.vdurmont.emoji.EmojiParser;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -82,7 +83,23 @@ public class MessageBodyHelper {
                     new InlineKeyboardRow(InlineKeyboardButton
                             .builder()
                             .text("Create")
-                            .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("create-envelope")))  // New callback identifier
+                            .switchInlineQueryCurrentChat("/create-envelope Name, Description, Quantity, Price")
+                            .build()
+                    )
+            )
+            .keyboardRow(
+                    new InlineKeyboardRow(InlineKeyboardButton
+                            .builder()
+                            .text("Update")
+                            .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("update-envelope")))  // New callback identifier
+                            .build()
+                    )
+            )
+            .keyboardRow(
+                    new InlineKeyboardRow(InlineKeyboardButton
+                            .builder()
+                            .text("Delete")
+                            .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("delete-envelope")))  // New callback identifier
                             .build()
                     )
             )
@@ -99,11 +116,17 @@ public class MessageBodyHelper {
                                 .build()
                         )
                 )
+                .build();
+    }
+
+    public static InlineKeyboardMarkup envelopeBodyU2(UUID id) {
+        return InlineKeyboardMarkup
+                .builder()
                 .keyboardRow(
                         new InlineKeyboardRow(InlineKeyboardButton
                                 .builder()
-                                .text("Skip")
-                                .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("envend")))  // New callback identifier
+                                .text("Update Stamp Configurations")
+                                .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("estamp", id)))  // New callback identifier
                                 .build()
                         )
                 )
@@ -153,21 +176,64 @@ public class MessageBodyHelper {
                 .build();
     }
 
-    public static final InlineKeyboardMarkup envelopeBodyUD = InlineKeyboardMarkup
-            .builder()
-            .keyboardRow(
-                    new InlineKeyboardRow(InlineKeyboardButton
-                            .builder()
-                            .text("Update")
-                            .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("env-update")))
-                            .build(),
-                            InlineKeyboardButton
-                                    .builder()
-                                    .text("Delete")
-                                    .callbackData("env-delete")
-                                    .build()
-                    )
-            )
-            .build();
+    public static InlineKeyboardMarkup envelopeBodyUp(List<Envelope> envelopes) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
 
+        // Generate one row per envelope
+        envelopes.forEach(envelope -> {
+            String prefill = String.format("/update-envelope %s, %s, %s, %d, %.2f",
+                    envelope.getId(),
+                    envelope.getName(),
+                    envelope.getDescription(),
+                    envelope.getQuantity(),
+                    envelope.getPrice());
+
+            InlineKeyboardButton updateChoice = InlineKeyboardButton.builder()
+                    .text("✏️ " + envelope.getName())
+                    .switchInlineQueryCurrentChat(prefill)
+                    .build();
+
+            rows.add(new InlineKeyboardRow(List.of(updateChoice)));
+        });
+
+        return InlineKeyboardMarkup.builder()
+                .keyboard(rows)
+                .build();
+    }
+
+//    public static InlineKeyboardMarkup envelopeBodyUp(List<Envelope> envelopes) {
+//        List<InlineKeyboardRow> rows = new ArrayList<>();
+//        //for each item in envelope show a button row
+//        envelopes.forEach(envelope -> {
+//
+//            InlineKeyboardButton updateChoice = InlineKeyboardButton.builder()
+//                    .text(envelope.getName())
+//                    .callbackData(CallbackPayloadUtil.toJson(
+//                            CallbackPayload.of("upenv", envelope.getId())
+//                    ))
+//                    .build();
+//            rows.add(new InlineKeyboardRow(List.of(updateChoice)));
+//        });
+//        return InlineKeyboardMarkup.builder()
+//                .keyboard(rows)
+//                .build();
+//    }
+
+    public static InlineKeyboardMarkup envelopeBodyDel(List<Envelope> envelopes) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        //for each item in envelope show a button row
+        envelopes.forEach(envelope -> {
+
+            InlineKeyboardButton updateChoice = InlineKeyboardButton.builder()
+                    .text(envelope.getName())
+                    .callbackData(CallbackPayloadUtil.toJson(
+                            CallbackPayload.of("delenv", envelope.getId())
+                    ))
+                    .build();
+            rows.add(new InlineKeyboardRow(List.of(updateChoice)));
+        });
+        return InlineKeyboardMarkup.builder()
+                .keyboard(rows)
+                .build();
+    }
 }

@@ -11,12 +11,10 @@ import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateC
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -112,7 +110,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
             // Set variables
             String name = update.getMessage().getFrom().getFirstName();
 //            Long id = update.getMessage().getFrom().getId();
-            String txt = update.getMessage().getText();
+            String txt = update.getMessage().getText().replace("@aa_waltuh_bot ","");
             long chat_id = update.getMessage().getChatId();
             String reply = "ok buddy "+EmojiParser.parseToUnicode(":nerd:");
             String errorEmoji = EmojiParser.parseToUnicode(":no_entry_sign:");
@@ -168,7 +166,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         buttons = MessageBodyHelper.envelopeBodyC;
                         break;
                     case "/create-envelope":
-                        String text = update.getMessage().getText().substring("/create-envelope".length()).trim();
+                        String text = txt.substring("/create-envelope".length()).trim();
                         String[] parts = text.split(",", 4);
                         if (parts.length == 4) {
                             String ename = parts[0].trim();
@@ -188,6 +186,41 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
                                 reply = "Created Envelope successfully: \n"+env;
                                 buttons = MessageBodyHelper.envelopeBodyC2(env.getId());
+
+                            } catch (NumberFormatException e) {
+                                reply = "❌ Quantity and price must be valid numbers.";
+                            }
+
+                        } else {
+                            reply = "❌ Invalid format. Use: /submit Name, Description, Quantity, Price";
+                        }
+                        break;
+                    case "/update-envelope":
+                        String textUp = txt.substring("/update-envelope".length()).trim();
+                        String[] partsUp = textUp.split(",", 5);
+                        if (partsUp.length == 5) {
+                            UUID id = UUID.fromString(partsUp[0].trim());
+                            String ename = partsUp[1].trim();
+                            String description = partsUp[2].trim();
+                            int quantity;
+                            BigDecimal price;
+
+                            try {
+                                quantity = Integer.parseInt(partsUp[3].trim());
+                                price = BigDecimal.valueOf(Double.parseDouble(partsUp[4].trim()));
+
+                                Envelope env = envelopeDao.findById(id).orElseThrow();
+                                env.setName(ename);
+                                env.setDescription(description);
+                                env.setPrice(price);
+                                env.setQuantity(quantity);
+
+                                envelopeDao.save(env);
+
+                                System.out.println("Updating envelope "+env.getId());
+
+                                reply = "Updated Envelope successfully: \n"+env;
+                                buttons = MessageBodyHelper.envelopeBodyU2(env.getId());
 
                             } catch (NumberFormatException e) {
                                 reply = "❌ Quantity and price must be valid numbers.";
@@ -251,26 +284,6 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         } catch (TelegramApiException e) {
                             log.error(Arrays.toString(e.getStackTrace()));
                         }
-                    }
-                    break;
-                case ("create-envelope") :
-                    SendMessage create_env = SendMessage.builder()
-                            .chatId(chat_id)
-                            .text("""
-                                Please enter the following fields (separated by commas):
-                        
-                                /create-envelope Name, Description, Quantity, Price
-                        
-                                Example:
-                                `/create-envelope Small, Small Blank Envelope, 1000, 99`
-                                """)
-                            .replyMarkup(ForceReplyKeyboard.builder().forceReply(true).build())
-                            .build();
-
-                    try {
-                        telegramClient.execute(create_env);
-                    } catch (TelegramApiException e) {
-                        log.error(Arrays.toString(e.getStackTrace()));
                     }
                     break;
                 case ("estamp") :
@@ -358,10 +371,6 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         }
                     }
                     break;
-                case "envend":
-                    deleteButtons(chat_id,message_id);
-                    resetEnvelopeFlow();
-                    break;
                 case "estampz":
                     Optional<Envelope> envelopeUpdateOptional = envelopeDao.findById(cachedId);
 
@@ -411,6 +420,57 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
                     resetEnvelopeFlow();
                     break;
+                case "update-envelope":
+                    resetEnvelopeFlow();
+                    List<Envelope> envelopesUpdate = envelopeDao.findAll();
+
+                    if (envelopesUpdate.isEmpty()) {
+                        log.error("No envelopes to update.");
+                        break;
+                    }
+
+                    EditMessageText updateEnv = EditMessageText.builder()
+                            .chatId(chat_id)
+                            .messageId(toIntExact(message_id))
+                            .text("Update envelope:")
+                            .replyMarkup(MessageBodyHelper.envelopeBodyUp(envelopesUpdate))
+                            .build();
+
+                    try {
+                        telegramClient.execute(updateEnv);
+                    } catch (TelegramApiException e) {
+                        log.error(Arrays.toString(e.getStackTrace()));
+                    }
+                    break;
+                case "delete-envelope":
+                    resetEnvelopeFlow();
+                    List<Envelope> envelopesDelete = envelopeDao.findAll();
+
+                    if (envelopesDelete.isEmpty()) {
+                        log.error("No envelopes to delete.");
+                        break;
+                    }
+
+                    EditMessageText delEnv = EditMessageText.builder()
+                            .chatId(chat_id)
+                            .messageId(toIntExact(message_id))
+                            .text("Delete envelope:")
+                            .replyMarkup(MessageBodyHelper.envelopeBodyDel(envelopesDelete))
+                            .build();
+
+                    try {
+                        telegramClient.execute(delEnv);
+                    } catch (TelegramApiException e) {
+                        log.error(Arrays.toString(e.getStackTrace()));
+                    }
+                    break;
+                case "delenv":
+                    resetEnvelopeFlow();
+                    UUID del_env = callback.getId();
+                    Envelope del_envelope = envelopeDao.findById(del_env).orElseThrow();
+                    envelopeDao.deleteById(del_env);
+                    editMessageOnCallback(update.getCallbackQuery().getMessage().getChatId(),update.getCallbackQuery().getMessage().getMessageId(),"Envelope deleted successfully :\n"+del_envelope);
+                    break;
             }
         }
     }
@@ -429,15 +489,18 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
         stampConfiguration = new HashMap<>();
     }
 
-    private void deleteButtons(long message_id, long chat_id){
+    private void editMessageOnCallback(long chat_id, long message_id, String msg){
+        EditMessageText edit = EditMessageText.builder()
+                .chatId(chat_id)
+                .messageId((int) message_id)
+                .text(msg)
+                .replyMarkup(null) // removes all buttons
+                .build();
+
         try {
-            telegramClient.execute(EditMessageReplyMarkup.builder()
-                    .chatId(chat_id)
-                    .messageId((int) message_id)
-                    .replyMarkup(null) // ✅ This removes all buttons
-                    .build());
+            telegramClient.execute(edit);
         } catch (TelegramApiException e) {
-            log.error("Telegram API error: {}", Arrays.toString(e.getStackTrace()), e);
+            log.error("Failed to confirm envelope deletion: {}", Arrays.toString(e.getStackTrace()), e);
         }
     }
 
