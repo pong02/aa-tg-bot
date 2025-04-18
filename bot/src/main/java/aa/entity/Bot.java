@@ -1,7 +1,6 @@
 package aa.entity;
 
 import aa.dto.CallbackPayload;
-import aa.exception.CacheError;
 import aa.exception.ParseError;
 import aa.helper.*;
 import aa.model.*;
@@ -19,7 +18,6 @@ import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.webapp.WebAppData;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import com.vdurmont.emoji.EmojiParser;
@@ -66,20 +64,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     @Override
     public void consume(Update update) {
-        if (update.hasMessage() && update.getMessage().hasWebAppData()) {
-            update.getMessage().getWebAppData();
-            long chat_id = update.getMessage().getChatId();
-            System.out.println("Received form data");
-            WebAppData webAppData = update.getMessage().getWebAppData();
-            String data = webAppData.getData();
-            long chatId = update.getMessage().getChatId();
-
-            // Process the Web App data as needed
-            // For example, send a confirmation message back to the user
-            SendMessage message = sendMessage(chat_id, "Received Web App data: " + data, null);
-
-        }
-        else if (expectingFile.get() && update.getMessage().hasDocument()) {
+        if (expectingFile.get() && update.getMessage().hasDocument()) {
             long chat_id = update.getMessage().getChatId();
             Document document = update.getMessage().getDocument();
             String fileName = document.getFileName();
@@ -289,16 +274,8 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                     }
                     break;
                 case ("estamp") :
-                    Envelope envelope;
                     UUID env_id = callback.getId();
                     System.out.println("Stamp config for envelope: "+env_id);
-                    Optional<Envelope> optionalEnvelope = envelopeDao.findById(env_id);
-                    if (optionalEnvelope.isEmpty()){
-                        log.error("Envelope failed to fetch.");
-                    }
-                    else {
-                        envelope = optionalEnvelope.get();
-                    }
                     List<Stamp> stamps = stampDao.findAllStamps();
                     //generate buttons row for each stamp found, with a + - button, each editing the message to show how many of each stamp we adding
                     stampConfiguration = stamps.stream()
