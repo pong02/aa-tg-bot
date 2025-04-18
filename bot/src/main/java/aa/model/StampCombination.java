@@ -17,4 +17,9 @@ public class StampCombination {
 
     @Column(nullable = false)
     private Integer quantity;
+
+    @Override
+    public String toString() {
+        return stamp.getName() + " × " + quantity;
+    }
 }

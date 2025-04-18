@@ -23,4 +23,18 @@ public class StampConfiguration {
     @ElementCollection
     @CollectionTable(name = "stamp_combination", joinColumns = @JoinColumn(name = "stamp_configuration_id"))
     private List<StampCombination> stampCombinations;
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("\n");
+        for (int i = 0; i < stampCombinations.size(); i++) {
+            if (i > 0){
+                sb.append("\n");
+            }
+            sb.append("  ").append(i + 1).append(". ")
+                    .append(stampCombinations.get(i));
+        }
+        return sb.toString();
+    }
+
 }

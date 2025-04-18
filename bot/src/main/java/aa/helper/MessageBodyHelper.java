@@ -99,6 +99,14 @@ public class MessageBodyHelper {
                                 .build()
                         )
                 )
+                .keyboardRow(
+                        new InlineKeyboardRow(InlineKeyboardButton
+                                .builder()
+                                .text("Skip")
+                                .callbackData(CallbackPayloadUtil.toJson(CallbackPayload.of("envend")))  // New callback identifier
+                                .build()
+                        )
+                )
                 .build();
     }
 

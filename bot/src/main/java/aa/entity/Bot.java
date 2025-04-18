@@ -1,6 +1,7 @@
 package aa.entity;
 
 import aa.dto.CallbackPayload;
+import aa.exception.CacheError;
 import aa.exception.ParseError;
 import aa.helper.*;
 import aa.model.*;
@@ -11,6 +12,7 @@ import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateC
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.File;
@@ -64,7 +66,6 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
     @Override
     public void consume(Update update) {
-        System.out.println("RAW UPDATE >>> " + update);
         if (update.hasMessage() && update.getMessage().hasWebAppData()) {
             update.getMessage().getWebAppData();
             long chat_id = update.getMessage().getChatId();
@@ -184,7 +185,6 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                     case "/create-envelope":
                         String text = update.getMessage().getText().substring("/create-envelope".length()).trim();
                         String[] parts = text.split(",", 4);
-
                         if (parts.length == 4) {
                             String ename = parts[0].trim();
                             String description = parts[1].trim();
@@ -195,19 +195,13 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                                 quantity = Integer.parseInt(parts[2].trim());
                                 price = BigDecimal.valueOf(Double.parseDouble(parts[3].trim()));
 
-                                reply = "✅ Submission received:\n" +
-                                                "Name: " + ename + "\n" +
-                                                "Description: " + description + "\n" +
-                                                "Quantity: " + quantity + "\n" +
-                                                "Price: RM" + price;
-
                                 Envelope env = Envelope.builder().name(ename).description(description).quantity(quantity).price(price).build();
 
                                 envelopeDao.save(env);
 
                                 System.out.println("Creating envelope "+env.getId());
 
-                                reply = "Created Envelope successfully: "+ListMessageFormatter.format(List.of(env));
+                                reply = "Created Envelope successfully: \n"+env;
                                 buttons = MessageBodyHelper.envelopeBodyC2(env.getId());
 
                             } catch (NumberFormatException e) {
@@ -287,6 +281,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                                 """)
                             .replyMarkup(ForceReplyKeyboard.builder().forceReply(true).build())
                             .build();
+
                     try {
                         telegramClient.execute(create_env);
                     } catch (TelegramApiException e) {
@@ -314,12 +309,20 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
                     //here cache the env id because stamp needs to be passed via payload id
                     cachedId = env_id;
+                    Optional<Envelope> envelopeDisplayOptional = envelopeDao.findById(cachedId);
+
+                    if (envelopeDisplayOptional.isEmpty()) {
+                        log.error("Envelope with ID " + cachedId + " not found. Aborting stamp configuration edit.");
+                        break;
+                    }
+
                     EditMessageText edit_stamp_conf = EditMessageText.builder()
                             .chatId(chat_id)
                             .messageId(toIntExact(message_id))
-                            .text("Editing stamp configuration for "+env_id)
+                            .text("Editing stamp configuration for "+envelopeDisplayOptional.get())
                             .replyMarkup(MessageBodyHelper.envelopeBodyC3(env_id,stampConfiguration))
                             .build();
+
                     try {
                         telegramClient.execute(edit_stamp_conf);
                     } catch (TelegramApiException e) {
@@ -346,11 +349,19 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                             stampConfiguration.put(stamp, currentQty - 1);
                         }
 
+                        Optional<Envelope> envelopeDisplayOptionalS = envelopeDao.findById(cachedId);
+
+                        if (envelopeDisplayOptionalS.isEmpty()) {
+                            log.error("Envelope with ID " + cachedId + " not found. Aborting stamp configuration edit.");
+                            break;
+                        }
+
+
                         // Update the message UI
                         EditMessageText updateQtyView = EditMessageText.builder()
                                 .chatId(chat_id)
                                 .messageId(toIntExact(message_id))
-                                .text("Editing stamp configuration for " + cachedId)
+                                .text("Editing stamp configuration for " + envelopeDisplayOptionalS.get())
                                 .replyMarkup(MessageBodyHelper.envelopeBodyC3(callback.getId(), stampConfiguration))
                                 .build();
 
@@ -370,6 +381,10 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         }
                     }
                     break;
+                case "envend":
+                    deleteButtons(chat_id,message_id);
+                    resetEnvelopeFlow();
+                    break;
                 case "estampz":
                     Optional<Envelope> envelopeUpdateOptional = envelopeDao.findById(cachedId);
 
@@ -377,8 +392,9 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
 
                         Envelope envelopeUpdate = envelopeUpdateOptional.get();
 
-                        //setup the stamp configuration
+                        //setup the stamp configuration here we need to ignore zero
                         List<StampCombination> combinations = stampConfiguration.entrySet().stream()
+                                .filter(entry -> entry.getValue() != null && entry.getValue() > 0)
                                 .map(entry -> StampCombination.builder()
                                         .stamp(entry.getKey())
                                         .quantity(entry.getValue())
@@ -394,10 +410,17 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         envelopeUpdate.setStampConfiguration(config);
                         envelopeDao.save(envelopeUpdate);
 
+                        Optional<Envelope> envelopeDisplayOptionalZ = envelopeDao.findById(cachedId);
+
+                        if (envelopeDisplayOptionalZ.isEmpty()) {
+                            log.error("Envelope with ID " + cachedId + " not found. Aborting stamp configuration edit.");
+                            break;
+                        }
+
                         EditMessageText updateQtyView = EditMessageText.builder()
                                 .chatId(chat_id)
                                 .messageId(toIntExact(message_id))
-                                .text("Successfully edited stamp configuration for " + cachedId)
+                                .text("Successfully edited stamp configuration for " + envelopeDisplayOptionalZ.get())
                                 .build();
                         try {
                             telegramClient.execute(updateQtyView);
@@ -409,7 +432,7 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                         log.error("Error setting stamp configuration for envelope "+ cachedId);
                     }
 
-                    cachedId = null;
+                    resetEnvelopeFlow();
                     break;
             }
         }
@@ -421,6 +444,24 @@ public class Bot implements LongPollingSingleThreadUpdateConsumer {
                 .text(reply)
                 .replyMarkup(buttons)
                 .build();
+    }
+
+    private void resetEnvelopeFlow(){
+        log.info("Purged cache for envelopes");
+        cachedId = null;
+        stampConfiguration = new HashMap<>();
+    }
+
+    private void deleteButtons(long message_id, long chat_id){
+        try {
+            telegramClient.execute(EditMessageReplyMarkup.builder()
+                    .chatId(chat_id)
+                    .messageId((int) message_id)
+                    .replyMarkup(null) // ✅ This removes all buttons
+                    .build());
+        } catch (TelegramApiException e) {
+            log.error("Telegram API error: {}", Arrays.toString(e.getStackTrace()), e);
+        }
     }
 
 }

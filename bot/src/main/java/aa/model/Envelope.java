@@ -27,4 +27,12 @@ public class Envelope {
     @JoinColumn(name = "stamp_config_id")
     private StampConfiguration stampConfiguration;
 
+    @Override
+    public String toString(){
+        return "["+name+"] : "+description+
+            "\nqty: "+quantity +
+            "\nprice: $" +price+
+            "\nstamps: "+ stampConfiguration +"\n";
+    }
+
 }
