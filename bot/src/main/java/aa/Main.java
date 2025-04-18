@@ -33,10 +33,8 @@ public class Main {
         String botToken = config.getTelegram().getToken();
 
         //set up for bot and cron
-        EntityManager em;
-        try (EntityManagerFactory emf = Persistence.createEntityManagerFactory("bot-persistence")) {
-            em = emf.createEntityManager();
-        }
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("bot-persistence");
+        EntityManager em = emf.createEntityManager();
         LabelDao labelDao = new LabelDaoImpl(em);
         LabelPurgeScheduler scheduler = new LabelPurgeScheduler(labelDao);
         scheduler.start();
